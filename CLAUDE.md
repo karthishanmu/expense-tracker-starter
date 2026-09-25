@@ -12,14 +12,13 @@ Do not spontaneously fix the remaining rough edges below. They are the teaching 
 
 The original starter stored `transaction.amount` as a **string**, so the totals' `reduce((sum, t) => sum + t.amount, 0)` concatenated instead of adding — Income rendered as `$05000` and Balance as `$-120015080095649500`.
 
-This is fixed by keeping `amount` numeric at both points where a value enters state: the seed data holds number literals, and `handleSubmit` runs `parseFloat` behind a `Number.isFinite` guard before storing. The two `reduce` calls were deliberately left untouched — they were always correct arithmetic, and patching them instead would have left strings in state for the next consumer to trip over.
+This is fixed by keeping `amount` numeric at both points where a value enters state: the seed data in `App.jsx` holds number literals, and `TransactionForm`'s `handleSubmit` runs `parseFloat` behind a `Number.isFinite` guard before calling `onAdd`. The two `reduce` calls in `Summary` were deliberately left untouched — they were always correct arithmetic, and patching them instead would have left strings in state for the next consumer to trip over.
 
 **Invariant to preserve:** `amount` must stay a `number` in state. `<input type="number">` yields a string, so any new write path into `transactions` has to parse first.
 
 ### Other deliberate rough edges
 
-- `.delete-btn` is styled in `src/App.css` but no delete button exists in the JSX. The transactions table carries a matching empty trailing `<th>`/`<td>` pair — a placeholder for the per-row delete feature.
-- Everything (state, derived totals, filtering, form handling, and all markup) lives in one ~155-line `App` component. There is no component decomposition yet.
+- `.delete-btn` is styled in `src/App.css` but no delete button exists in the JSX. `TransactionList` carries a matching empty trailing `<th>`/`<td>` pair — a placeholder for the per-row delete feature. Wiring it up means threading an `onDelete` prop from `App` down through `TransactionList`.
 - There is no currency formatting — amounts interpolate raw, so `10.50` renders as `$10.5`, and float addition can surface artifacts like `$0.30000000000000004`. A `.toFixed(2)` on the three summary cards and the row amounts would settle it.
 
 ## Commands
@@ -58,11 +57,27 @@ Caveats when working this way:
 
 ## Architecture
 
-Vite 7 + React 19, client-only. `index.html` → `src/main.jsx` (mounts `<App>` in `StrictMode`) → `src/App.jsx`.
+Vite 7 + React 19, client-only. `index.html` → `src/main.jsx` (mounts `<App>` in `StrictMode`) → `src/App.jsx`. Components sit flat in `src/`, not in a `components/` subdirectory.
+
+`App` is now a thin shell: it owns the `transactions` array and an add handler, and composes three children. Each child holds whatever state only it cares about, so nothing is prop-drilled and there are no setter props.
+
+| File | Owns | Props |
+|---|---|---|
+| `src/App.jsx` | the `transactions` array; assigns `id` and `date` on add | — |
+| `src/Summary.jsx` | nothing; derives the three totals | `transactions` |
+| `src/TransactionForm.jsx` | the four form fields, validation, reset | `onAdd` |
+| `src/TransactionList.jsx` | `filterType` / `filterCategory`; derives the filtered rows | `transactions` |
+
+Two boundaries worth respecting:
+
+- **`TransactionForm` reports only user-entered fields** — `onAdd({ description, amount, type, category })`. `App` supplies `id` and `date`, because those are system-generated rather than typed. The form parses and validates before calling `onAdd`, so `App` trusts what it receives.
+- **`Summary` gets the full `transactions`, never the filtered list.** `TransactionList` filters internally and does not expose the result, which is what keeps the totals reflecting all transactions while the table is filtered. Do not lift the filter state into `App` without accounting for this.
+
+Component styles all stay in `App.css` rather than per-component files, because `.income-amount` and `.expense-amount` are shared between the summary cards and the table rows — splitting them would duplicate those rules. `App.css` is imported once by `App`, and CSS is global, so the classes resolve in every child.
 
 - **No backend, no persistence, no routing, no state library.** All transactions live in a single `useState` array in `App`, seeded with eight hardcoded entries. State resets on every page reload.
-- **Totals and filtering are derived inline on each render** — recomputed from `transactions` rather than stored, so they stay consistent automatically. Filtering chains two independent predicates (`filterType`, `filterCategory`), each with an `"all"` sentinel that skips the filter.
-- **`categories` is a single hardcoded array** driving both the add-transaction `<select>` and the filter `<select>`. Adding a category means touching only that array.
+- **Totals and filtering are derived inline on each render** — recomputed rather than stored, so they stay consistent automatically. Filtering chains two independent predicates, each with an `"all"` sentinel that skips the filter.
+- **`src/categories.js` exports the one hardcoded category array**, imported by both the form's `<select>` and the list's category filter. It lives in its own module rather than being passed down, since `App` itself has no use for it. Adding a category means touching only that file.
 - **A transaction's `type`** (`"income"` / `"expense"`) drives both the totals split and the row's sign and CSS class. Note the seed data contains a mislabeled row: "Freelance Work" is categorized `salary` but typed `expense`.
 - **Styling is plain CSS**, no preprocessor or CSS modules: `src/index.css` (minimal global reset) and `src/App.css` (plain class selectors plus bare `form` / `table` / `th` element selectors — these are global, so element-level changes affect everything).
 
