@@ -6,18 +6,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Per the README, this is the starter project for the [Code with Mosh Claude Code course](https://codewithmosh.com/p/claude-code). It **intentionally** ships with a bug, poor UI, and messy code, which are fixed progressively as course exercises.
 
-Do not spontaneously fix the known defects below. They are the teaching material. Fix them only when explicitly asked.
+Do not spontaneously fix the remaining rough edges below. They are the teaching material. Fix them only when explicitly asked.
 
-### The intentional bug
+### The amount bug — already fixed
 
-`transaction.amount` is stored as a **string**, not a number (see the seed data in `src/App.jsx`, and note that `<input type="number">` also yields a string). The totals use `reduce((sum, t) => sum + t.amount, 0)`, so `+` concatenates instead of adding. This renders as Income `$05000`, Expenses `$0120015080095654515`, Balance `$-120015080095649500`.
+The original starter stored `transaction.amount` as a **string**, so the totals' `reduce((sum, t) => sum + t.amount, 0)` concatenated instead of adding — Income rendered as `$05000` and Balance as `$-120015080095649500`.
 
-Any real fix has to coerce at both the seed data and the form-submit boundary, not just at the `reduce`.
+This is fixed by keeping `amount` numeric at both points where a value enters state: the seed data holds number literals, and `handleSubmit` runs `parseFloat` behind a `Number.isFinite` guard before storing. The two `reduce` calls were deliberately left untouched — they were always correct arithmetic, and patching them instead would have left strings in state for the next consumer to trip over.
+
+**Invariant to preserve:** `amount` must stay a `number` in state. `<input type="number">` yields a string, so any new write path into `transactions` has to parse first.
 
 ### Other deliberate rough edges
 
 - `.delete-btn` is styled in `src/App.css` but no delete button exists in the JSX. The transactions table carries a matching empty trailing `<th>`/`<td>` pair — a placeholder for the per-row delete feature.
 - Everything (state, derived totals, filtering, form handling, and all markup) lives in one ~155-line `App` component. There is no component decomposition yet.
+- There is no currency formatting — amounts interpolate raw, so `10.50` renders as `$10.5`, and float addition can surface artifacts like `$0.30000000000000004`. A `.toFixed(2)` on the three summary cards and the row amounts would settle it.
 
 ## Commands
 
