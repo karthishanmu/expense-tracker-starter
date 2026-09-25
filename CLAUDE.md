@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Per the README, this is the starter project for the [Code with Mosh Claude Code course](https://codewithmosh.com/p/claude-code). It **intentionally** ships with a bug, poor UI, and messy code, which are fixed progressively as course exercises.
 
-Do not spontaneously fix the remaining rough edges below. They are the teaching material. Fix them only when explicitly asked.
+Do not spontaneously fix the **intentional** rough edges listed below — they are the teaching material, so fix them only when explicitly asked. The **latent issues** in the second list are not course material; they are genuine defects and are fair game to raise.
 
 ### The amount bug — already fixed
 
@@ -16,10 +16,16 @@ This is fixed by keeping `amount` numeric at both points where a value enters st
 
 **Invariant to preserve:** `amount` must stay a `number` in state. `<input type="number">` yields a string, so any new write path into `transactions` has to parse first.
 
-### Other deliberate rough edges
+### Intentional rough edges — leave alone unless asked
 
-- `.delete-btn` is styled in `src/App.css` but no delete button exists in the JSX. `TransactionList` carries a matching empty trailing `<th>`/`<td>` pair — a placeholder for the per-row delete feature. Wiring it up means threading an `onDelete` prop from `App` down through `TransactionList`.
 - There is no currency formatting — amounts interpolate raw, so `10.50` renders as `$10.5`, and float addition can surface artifacts like `$0.30000000000000004`. A `.toFixed(2)` on the three summary cards and the row amounts would settle it.
+- The "Freelance Work" seed row is `type: "expense"` with `category: "salary"`, so the Income + Salary filter pair matches nothing. Probably unintended in the original data, but it is seed data, not logic.
+
+### Latent issues — real defects, not course material
+
+- **`id: Date.now()` can collide** if two transactions are ever added within the same millisecond, which would make one delete click remove two rows and duplicate React keys. Not reachable through the UI today — a human form submit gates every add, and StrictMode double-invokes render, not event handlers — but any bulk import or programmatic add would expose it. One-line fix: `crypto.randomUUID()`. Ids are only used for `key` and `===`, never sorted or used in arithmetic, so the type change is safe.
+- The table header cells lack `scope="col"`.
+- Delete is immediate and there is no undo. A page reload resurrects the eight seed rows but not anything the user added, so "reload to recover" is misleading advice. Worth revisiting if persistence is ever added.
 
 ## Commands
 
@@ -63,15 +69,17 @@ Vite 7 + React 19, client-only. `index.html` → `src/main.jsx` (mounts `<App>` 
 
 | File | Owns | Props |
 |---|---|---|
-| `src/App.jsx` | the `transactions` array; assigns `id` and `date` on add | — |
+| `src/App.jsx` | the `transactions` array; assigns `id` and `date` on add, removes by `id` on delete | — |
 | `src/Summary.jsx` | nothing; derives the three totals | `transactions` |
 | `src/TransactionForm.jsx` | the four form fields, validation, reset | `onAdd` |
-| `src/TransactionList.jsx` | `filterType` / `filterCategory`; derives the filtered rows | `transactions` |
+| `src/TransactionList.jsx` | `filterType` / `filterCategory`; derives the filtered rows | `transactions`, `onDelete` |
 
 Two boundaries worth respecting:
 
 - **`TransactionForm` reports only user-entered fields** — `onAdd({ description, amount, type, category })`. `App` supplies `id` and `date`, because those are system-generated rather than typed. The form parses and validates before calling `onAdd`, so `App` trusts what it receives.
 - **`Summary` gets the full `transactions`, never the filtered list.** `TransactionList` filters internally and does not expose the result, which is what keeps the totals reflecting all transactions while the table is filtered. Do not lift the filter state into `App` without accounting for this.
+- **Delete removes by `id`, never by index**, and the `window.confirm` prompt lives in `TransactionList`, not `App`. Index-based removal would delete the wrong row whenever a filter is active, since a row's position in `filteredTransactions` does not match its position in `transactions`. Keeping the dialog in the child mirrors `TransactionForm` validating before it calls `onAdd`, leaving `App` purely about data.
+- **Do not derive the category filter's `<option>` list from the transaction data.** It reads from the static `categories` array, which is why deleting the last `food` row leaves `filterCategory === "food"` pointing at a still-valid option that simply matches zero rows. Deriving the options would produce the classic stale-filter bug where the select's value matches no option and the control renders blank.
 
 Component styles all stay in `App.css` rather than per-component files, because `.income-amount` and `.expense-amount` are shared between the summary cards and the table rows — splitting them would duplicate those rules. `App.css` is imported once by `App`, and CSS is global, so the classes resolve in every child.
 

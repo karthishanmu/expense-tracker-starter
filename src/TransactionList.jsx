@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { categories } from './categories.js'
 
-function TransactionList({ transactions }) {
+function TransactionList({ transactions, onDelete }) {
   const [filterType, setFilterType] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
 
@@ -12,6 +12,11 @@ function TransactionList({ transactions }) {
   if (filterCategory !== "all") {
     filteredTransactions = filteredTransactions.filter(t => t.category === filterCategory);
   }
+
+  const handleDelete = (t) => {
+    if (!window.confirm(`Delete "${t.description}"?`)) return;
+    onDelete(t.id);
+  };
 
   return (
     <div className="transactions">
@@ -37,10 +42,19 @@ function TransactionList({ transactions }) {
             <th>Description</th>
             <th>Category</th>
             <th>Amount</th>
-
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
+          {filteredTransactions.length === 0 && (
+            <tr>
+              <td className="empty-row" colSpan={5}>
+                {transactions.length === 0
+                  ? "No transactions yet."
+                  : "No transactions match these filters."}
+              </td>
+            </tr>
+          )}
           {filteredTransactions.map(t => (
             <tr key={t.id}>
               <td>{t.date}</td>
@@ -49,7 +63,16 @@ function TransactionList({ transactions }) {
               <td className={t.type === "income" ? "income-amount" : "expense-amount"}>
                 {t.type === "income" ? "+" : "-"}${t.amount}
               </td>
-
+              <td>
+                <button
+                  type="button"
+                  className="delete-btn"
+                  aria-label={`Delete ${t.description}`}
+                  onClick={() => handleDelete(t)}
+                >
+                  Delete
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>
